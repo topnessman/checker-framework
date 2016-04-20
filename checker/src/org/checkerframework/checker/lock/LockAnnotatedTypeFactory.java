@@ -16,6 +16,7 @@ import org.checkerframework.checker.lock.qual.LockPossiblyHeld;
 import org.checkerframework.checker.lock.qual.LockingFree;
 import org.checkerframework.checker.lock.qual.MayReleaseLocks;
 import org.checkerframework.checker.lock.qual.ReleasesNoLocks;
+import org.checkerframework.dataflow.analysis.FlowExpressions.Receiver;
 import org.checkerframework.dataflow.qual.Pure;
 import org.checkerframework.dataflow.qual.SideEffectFree;
 import org.checkerframework.framework.type.*;
@@ -24,20 +25,28 @@ import org.checkerframework.framework.type.treeannotator.ImplicitsTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.ListTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.PropagationTreeAnnotator;
 import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
+import org.checkerframework.framework.type.visitor.AnnotatedTypeScanner;
 import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.framework.util.AnnotationBuilder;
+import org.checkerframework.framework.util.FlowExpressionParseUtil;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy;
+import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionContext;
+import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionParseException;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.InternalUtils;
 import org.checkerframework.javacutil.Pair;
+import org.checkerframework.javacutil.TreeUtils;
 
+import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
+import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
+import com.sun.source.util.TreePath;
 
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
@@ -72,6 +81,8 @@ public class LockAnnotatedTypeFactory
         SIDEEFFECTFREE, GUARDEDBYUNKNOWN, GUARDEDBY,
         GUARDEDBYBOTTOM, GUARDSATISFIED;
 
+    private final GuardedByCanonicalizer guardedbyCanonicalizer = new GuardedByCanonicalizer();
+    
     public LockAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker, true);
 
@@ -519,8 +530,10 @@ public class LockAnnotatedTypeFactory
     @Override
     public void annotateImplicit(Element elt, AnnotatedTypeMirror type) {
         translateJcipAndJavaxAnnotations(elt, type);
-
+        
         super.annotateImplicit(elt, type);
+
+        //canonicalizeAtm(elt, type);
     }
 
     @Override
@@ -528,8 +541,10 @@ public class LockAnnotatedTypeFactory
         if (tree.getKind() == Tree.Kind.VARIABLE) {
             translateJcipAndJavaxAnnotations(InternalUtils.symbol((VariableTree) tree), type);
         }
-
+        
         super.annotateImplicit(tree, type, useFlow);
+
+        canonicalizeAtm(tree, type);
     }
 
     /**
@@ -564,6 +579,84 @@ public class LockAnnotatedTypeFactory
             atm.addAnnotation(createGuardedByAnnotationMirror(lockExpressions));
         }
     }
+    
+    private void canonicalizeAtm(Tree tree, AnnotatedTypeMirror atm) {
+       
+        Element elem = InternalUtils.symbol(tree);
+        
+        TreePath path = trees.getPath(elem);
+        if (path == null) {
+            return;
+        }
+        
+        MethodTree enclMethod = TreeUtils.enclosingMethod(path);
+        FlowExpressionContext flowExprContext;
+        if (enclMethod != null) {
+            flowExprContext = FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclMethod, path, checker.getContext());
+        } else {
+            ClassTree enclosingClass = TreeUtils.enclosingClass(path);
+            flowExprContext = FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclosingClass, path, checker.getContext());
+        }
+
+        // Adapted from BaseTypeVisitor.checkPreconditions
+
+        if (flowExprContext == null) {
+            // The expressions cannot be parsed. Issue an error for the whole list of @GuardedBy expressions.
+            // Error issued elsewhere:
+            // checker.report(Result.failure("lock.expression.possibly.not.final", guardedByValue), tree);
+            return;
+        }
+
+        /*TreePath pathForLocalVariableRetrieval = LockVisitor.getPathForLocalVariableRetrieval(path);
+
+        if (pathForLocalVariableRetrieval == null) {
+            // The expressions cannot be parsed. Issue an error for the whole list of @GuardedBy expressions.
+            //checker.report(Result.failure("lock.expression.possibly.not.final", guardedByValue), tree);
+            return;
+        }*/
+
+        // rename GuardedByCanonicalizer to include viewpoint adaptation TODO
+        
+        
+        guardedbyCanonicalizer.canonicalize(atm,flowExprContext,path,tree);
+    }
+
+    private void canonicalizeGuardedByValues(AnnotatedTypeMirror atm, FlowExpressionContext flowExprContext, TreePath path, Tree tree) {
+        AnnotationMirror anno = atm.getAnnotation(GuardedBy.class);
+        
+        if (anno == null) {
+            return;
+        }
+        
+        List<String> lockExpressions = AnnotationUtils.getElementValueArray(anno, "value", String.class, true);
+
+        if (lockExpressions.isEmpty()) {
+            // getting the FlowExpressionContext could be costly,
+            // so don't do it if there isn't a lock expression to check
+            return;
+        }
+
+        ArrayList<String> newLockExpressions = new ArrayList<String>(lockExpressions.size());
+        
+        for (String lockExpression : lockExpressions) {
+            try {
+                // Attempt to parse the lock expression.
+                // This will also issue errors if the lock expressions are not final
+                
+                Receiver expr = LockVisitor.parseExpressionStringStatic(this, lockExpression, flowExprContext,
+                                      path, null, tree);
+                newLockExpressions.add(expr.toString());
+            } catch (FlowExpressionParseException e) {
+                newLockExpressions.add(lockExpression);
+                //checker.report(e.getResult(), tree);
+            }
+        }
+        
+        if (!newLockExpressions.equals(lockExpressions)) {
+            atm.replaceAnnotation(createGuardedByAnnotationMirror(newLockExpressions));
+        }
+    }
+    
 
     /**
      * @param values a list of lock expressions
@@ -577,4 +670,33 @@ public class LockAnnotatedTypeFactory
         // Return the resulting AnnotationMirror
         return builder.build();
     }
+
+    class GuardedByCanonicalizer extends AnnotatedTypeScanner<Void, Void> {
+        private FlowExpressionContext context = null;
+        private TreePath path = null;
+        private Tree leaf = null;
+
+        // An instance of GuardedByCanonicalizer can be reused because canonicalize calls reset().
+        protected  void canonicalize(final AnnotatedTypeMirror type, final FlowExpressionContext context,
+                                     final TreePath path, final Tree leaf) {
+            reset();
+
+            this.context = context;
+            this.path = path;
+            this.leaf = leaf;
+            this.scan(type, null);
+        }
+
+        @Override
+        protected Void scan(AnnotatedTypeMirror type, Void v) {
+          if (type == null) {
+              return null;             //handles non-existent receivers
+          }
+
+          canonicalizeGuardedByValues(type, context, path, leaf);
+          return super.scan(type, null);
+        }
+      }
+    
+    
 }

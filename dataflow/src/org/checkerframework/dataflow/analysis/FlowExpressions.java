@@ -350,7 +350,7 @@ public class FlowExpressions {
 
         @Override
         public String toString() {
-            return "this";
+            return getType().toString() + ".this";
         }
 
         @Override
@@ -610,9 +610,9 @@ public class FlowExpressions {
 
         protected final Receiver receiver;
         protected final List<Receiver> parameters;
-        protected final Element method;
+        protected final ExecutableElement method;
 
-        public MethodCall(TypeMirror type, Element method,
+        public MethodCall(TypeMirror type, ExecutableElement method,
                 Receiver receiver, List<Receiver> parameters) {
             super(type);
             this.receiver = receiver;
@@ -651,9 +651,9 @@ public class FlowExpressions {
         }
 
         /**
-         * @return the Element for the method call.
+         * @return the ExecutableElement for the method call.
          */
-        public Element getElement() {
+        public ExecutableElement getElement() {
             return method;
         }
 
