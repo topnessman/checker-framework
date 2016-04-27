@@ -211,6 +211,12 @@ public class FlowExpressionParseUtil {
                 return context.receiver;
             }
         } else if (superMatcher.matches() && allowSelf) {
+            if (context.receiver instanceof ThisReference) {
+                if (((ThisReference) context.receiver).isSuper()) {
+                    return context.receiver;
+                }
+            }
+
             // super literal
             List<? extends TypeMirror> superTypes = types
                     .directSupertypes(context.receiver.getType());
@@ -230,11 +236,12 @@ public class FlowExpressionParseUtil {
             if (superType == null) {
                 throw constructParserException(s);
             }
-            return new ThisReference(superType);
+            return new ThisReference(superType, true);
         } else if (identifierMatcher.matches() && allowIdentifier) {
             Resolver resolver = new Resolver(env);
             try {
-                if (allowLocalVariables) {
+                MethodTree enclmeth = TreeUtils.enclosingMethod(path);
+                if (allowLocalVariables && enclmeth != null) {
                     VariableElement varElem = resolver.findLocalVariableOrParameter(s, path);
                     if (varElem != null) {
                         return new LocalVariable(varElem);

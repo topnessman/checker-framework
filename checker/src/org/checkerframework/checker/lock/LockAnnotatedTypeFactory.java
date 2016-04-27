@@ -17,6 +17,7 @@ import org.checkerframework.checker.lock.qual.LockingFree;
 import org.checkerframework.checker.lock.qual.MayReleaseLocks;
 import org.checkerframework.checker.lock.qual.ReleasesNoLocks;
 import org.checkerframework.dataflow.analysis.FlowExpressions.Receiver;
+import org.checkerframework.dataflow.cfg.node.Node;
 import org.checkerframework.dataflow.qual.Pure;
 import org.checkerframework.dataflow.qual.SideEffectFree;
 import org.checkerframework.framework.type.*;
@@ -43,6 +44,7 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.Tree.Kind;
 import com.sun.source.tree.VariableTree;
@@ -81,8 +83,8 @@ public class LockAnnotatedTypeFactory
         SIDEEFFECTFREE, GUARDEDBYUNKNOWN, GUARDEDBY,
         GUARDEDBYBOTTOM, GUARDSATISFIED;
 
-    private final GuardedByCanonicalizer guardedbyCanonicalizer = new GuardedByCanonicalizer();
-    
+    private final GuardedByViewpointAdapter guardedbyViewpointAdapter = new GuardedByViewpointAdapter();
+
     public LockAnnotatedTypeFactory(BaseTypeChecker checker) {
         super(checker, true);
 
@@ -530,10 +532,10 @@ public class LockAnnotatedTypeFactory
     @Override
     public void annotateImplicit(Element elt, AnnotatedTypeMirror type) {
         translateJcipAndJavaxAnnotations(elt, type);
-        
+
         super.annotateImplicit(elt, type);
 
-        //canonicalizeAtm(elt, type);
+        // TODO: viewpointAdaptGuardedByExpressions(elt, type);
     }
 
     @Override
@@ -541,10 +543,24 @@ public class LockAnnotatedTypeFactory
         if (tree.getKind() == Tree.Kind.VARIABLE) {
             translateJcipAndJavaxAnnotations(InternalUtils.symbol((VariableTree) tree), type);
         }
-        
+
         super.annotateImplicit(tree, type, useFlow);
 
-        canonicalizeAtm(tree, type);
+        viewpointAdaptGuardedByExpressions(tree, type);
+    }
+
+    @Override
+    public AnnotatedTypeMirror getMethodReturnType(MethodTree m, ReturnTree r) {
+        AnnotatedTypeMirror atm = super.getMethodReturnType(m, r);
+        viewpointAdaptGuardedByExpressions(m, atm);
+        return atm;
+    }
+
+    @Override
+    public AnnotatedTypeMirror getAnnotatedTypeLhs(Tree lhsTree) {
+        AnnotatedTypeMirror atm = super.getAnnotatedTypeLhs(lhsTree);
+        viewpointAdaptGuardedByExpressions(lhsTree, atm);
+        return atm;
     }
 
     /**
@@ -573,90 +589,115 @@ public class LockAnnotatedTypeFactory
 
         List<String> lockExpressions = AnnotationUtils.getElementValueArray(anno, "value", String.class, true);
 
+        // TODO: check if Lock Checker @GB anno is present.
+
         if (lockExpressions.isEmpty()) {
             atm.addAnnotation(GUARDEDBY);
         } else {
             atm.addAnnotation(createGuardedByAnnotationMirror(lockExpressions));
         }
     }
-    
-    private void canonicalizeAtm(Tree tree, AnnotatedTypeMirror atm) {
-       
+
+    /***
+     * Viewpoint adapt 'expressions' in @GuardedBy(expressions) annotations in the given
+     * AnnotatedTypeMirror with respect to the given Tree. The @GuardedBy(...) annotations
+     * with adapted expressions are reinserted into the AnnotatedTypeMirror.
+     *
+     * @param tree the Tree with respect to which to perform the viewpoint adaptation.
+     * @param atm the AnnotatedTypeMirror containing the @GuardedBy(...) annotations.
+     */
+    // package-private
+    void viewpointAdaptGuardedByExpressions(Tree tree, AnnotatedTypeMirror atm) {
         Element elem = InternalUtils.symbol(tree);
-        
-        TreePath path = trees.getPath(elem);
+
+        TreePath path = getPath(elem == null ? null : declarationFromElement(elem));
         if (path == null) {
+            // TODO: What is the appropriate way to issue an error from an AnnotatedTypeFactory?
+            // An error could be issued by having an AnnotatedTypeScanner scan atm for @GuardedBy(...)
+            // annotations and only issue the error if one is present.
             return;
         }
-        
-        MethodTree enclMethod = TreeUtils.enclosingMethod(path);
-        FlowExpressionContext flowExprContext;
-        if (enclMethod != null) {
-            flowExprContext = FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclMethod, path, checker.getContext());
-        } else {
-            ClassTree enclosingClass = TreeUtils.enclosingClass(path);
-            flowExprContext = FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclosingClass, path, checker.getContext());
-        }
 
-        // Adapted from BaseTypeVisitor.checkPreconditions
+        FlowExpressionContext flowExprContext = null;
+        Node node = null;
+
+        switch(tree.getKind()) {
+            case VARIABLE:
+                flowExprContext = getFlowExpressionContextFromEnclosingMethodOrClass(path);
+                break;
+            case METHOD:
+                flowExprContext = FlowExpressionParseUtil.buildFlowExprContextForDeclaration((MethodTree) tree, path, checker);
+                break;
+            default:
+                node = getNodeForTree(tree);
+                if (node != null) {
+                    flowExprContext = checker.getVisitor().getFlowExpressionContextFromNode(node, path);
+                } else {
+                    flowExprContext = getFlowExpressionContextFromEnclosingMethodOrClass(path);
+                }
+            break;
+        }
 
         if (flowExprContext == null) {
-            // The expressions cannot be parsed. Issue an error for the whole list of @GuardedBy expressions.
-            // Error issued elsewhere:
-            // checker.report(Result.failure("lock.expression.possibly.not.final", guardedByValue), tree);
+            // TODO: What is the appropriate way to issue an error from an AnnotatedTypeFactory?
+            // An error could be issued by having an AnnotatedTypeScanner scan atm for @GuardedBy(...)
+            // annotations and only issue the error if one is present.
             return;
         }
 
-        /*TreePath pathForLocalVariableRetrieval = LockVisitor.getPathForLocalVariableRetrieval(path);
-
-        if (pathForLocalVariableRetrieval == null) {
-            // The expressions cannot be parsed. Issue an error for the whole list of @GuardedBy expressions.
-            //checker.report(Result.failure("lock.expression.possibly.not.final", guardedByValue), tree);
-            return;
-        }*/
-
-        // rename GuardedByCanonicalizer to include viewpoint adaptation TODO
-        
-        
-        guardedbyCanonicalizer.canonicalize(atm,flowExprContext,path,tree);
+        guardedbyViewpointAdapter.viewpointAdapt(atm, flowExprContext, path, tree, node);
     }
 
-    private void canonicalizeGuardedByValues(AnnotatedTypeMirror atm, FlowExpressionContext flowExprContext, TreePath path, Tree tree) {
+    private FlowExpressionContext getFlowExpressionContextFromEnclosingMethodOrClass(TreePath path) {
+        MethodTree enclosingMethod = TreeUtils.enclosingMethod(path);
+        if (enclosingMethod != null) {
+            return FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclosingMethod, path, checker.getContext());
+        } else {
+            ClassTree enclosingClass = TreeUtils.enclosingClass(path);
+            if (enclosingClass == null) {
+                return null;
+            }
+            return FlowExpressionParseUtil.buildFlowExprContextForDeclaration(enclosingClass, path, checker.getContext());
+        }
+    }
+
+    private void viewpointAdaptGuardedByValues(AnnotatedTypeMirror atm, FlowExpressionContext flowExprContext, TreePath path, Tree tree, Node node) {
         AnnotationMirror anno = atm.getAnnotation(GuardedBy.class);
-        
+
         if (anno == null) {
             return;
         }
-        
+
         List<String> lockExpressions = AnnotationUtils.getElementValueArray(anno, "value", String.class, true);
 
         if (lockExpressions.isEmpty()) {
-            // getting the FlowExpressionContext could be costly,
-            // so don't do it if there isn't a lock expression to check
             return;
         }
 
         ArrayList<String> newLockExpressions = new ArrayList<String>(lockExpressions.size());
-        
+
         for (String lockExpression : lockExpressions) {
             try {
                 // Attempt to parse the lock expression.
-                // This will also issue errors if the lock expressions are not final
-                
-                Receiver expr = LockVisitor.parseExpressionStringStatic(this, lockExpression, flowExprContext,
-                                      path, null, tree);
-                newLockExpressions.add(expr.toString());
+
+                if (lockExpression.equals("itself") || lockExpression.startsWith("itself.")) {
+                    // Take the risk that "itself" might be the name of a variable. Ignore that case.
+                    newLockExpressions.add(lockExpression);
+                }
+                else {
+                    Receiver expr = checker.getVisitor().parseExpressionString(lockExpression, flowExprContext,
+                                          path, node, tree);
+                    newLockExpressions.add(expr.toString());
+                }
             } catch (FlowExpressionParseException e) {
                 newLockExpressions.add(lockExpression);
-                //checker.report(e.getResult(), tree);
             }
         }
-        
+
         if (!newLockExpressions.equals(lockExpressions)) {
             atm.replaceAnnotation(createGuardedByAnnotationMirror(newLockExpressions));
         }
     }
-    
 
     /**
      * @param values a list of lock expressions
@@ -671,19 +712,21 @@ public class LockAnnotatedTypeFactory
         return builder.build();
     }
 
-    class GuardedByCanonicalizer extends AnnotatedTypeScanner<Void, Void> {
+    class GuardedByViewpointAdapter extends AnnotatedTypeScanner<Void, Void> {
         private FlowExpressionContext context = null;
         private TreePath path = null;
         private Tree leaf = null;
+        private Node node = null;
 
-        // An instance of GuardedByCanonicalizer can be reused because canonicalize calls reset().
-        protected  void canonicalize(final AnnotatedTypeMirror type, final FlowExpressionContext context,
-                                     final TreePath path, final Tree leaf) {
+        // An instance of GuardedByViewpointAdapter can be reused because viewpointAdapt calls reset().
+        protected  void viewpointAdapt(final AnnotatedTypeMirror type, final FlowExpressionContext context,
+                                     final TreePath path, final Tree leaf, final Node node) {
             reset();
 
             this.context = context;
             this.path = path;
             this.leaf = leaf;
+            this.node = node;
             this.scan(type, null);
         }
 
@@ -693,10 +736,14 @@ public class LockAnnotatedTypeFactory
               return null;             //handles non-existent receivers
           }
 
-          canonicalizeGuardedByValues(type, context, path, leaf);
+          viewpointAdaptGuardedByValues(type, context, path, leaf, node);
           return super.scan(type, null);
         }
       }
-    
-    
+
+    // TODO: temporary hack to avoid insertion of duplicate @GuardedBy annotations - remove and fix the root cause.
+    @Override
+    protected void postProcessClassTree(ClassTree tree) {
+        DeclarationsIntoElements.store(processingEnv, this, tree);
+    }
 }

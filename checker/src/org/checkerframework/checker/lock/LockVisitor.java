@@ -36,7 +36,6 @@ import org.checkerframework.framework.util.AnnotatedTypes;
 import org.checkerframework.framework.util.FlowExpressionParseUtil;
 import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionContext;
 import org.checkerframework.framework.util.FlowExpressionParseUtil.FlowExpressionParseException;
-import org.checkerframework.javacutil.AnnotationProvider;
 import org.checkerframework.javacutil.AnnotationUtils;
 import org.checkerframework.javacutil.ElementUtils;
 import org.checkerframework.javacutil.ErrorReporter;
@@ -289,6 +288,18 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
         }
 
         return false;
+    }
+
+    @Override
+    protected void checkMethodInvocability(AnnotatedExecutableType method,
+            MethodInvocationTree node) {
+        if (method.getReceiverType() != null && // Static methods don't have a receiver.
+            method.getElement().getKind() != ElementKind.CONSTRUCTOR) { // See TODO in super.checkMethodInvocability
+            AnnotatedTypeMirror methodReceiver = method.getReceiverType();
+            atypeFactory.viewpointAdaptGuardedByExpressions(node, methodReceiver);
+        }
+
+        super.checkMethodInvocability(method, node);
     }
 
     @Override
@@ -976,7 +987,7 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
             try {
                 // Attempt to parse the lock expression.
                 // This will also issue errors if the lock expressions are not final
-                parseExpressionStringLockVisitor(lockExpression, flowExprContext,
+                parseExpressionString(lockExpression, flowExprContext,
                                       pathForLocalVariableRetrieval, null, tree);
             } catch (FlowExpressionParseException e) {
                 checker.report(e.getResult(), tree);
@@ -1048,7 +1059,7 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
      * @param path the TreePath whose leaf is an AnnotationTree.
      * @return a TreePath that can be passed to methods in the Resolver class to locate local variables.
      */
-    static TreePath getPathForLocalVariableRetrieval(TreePath path) {
+    private TreePath getPathForLocalVariableRetrieval(TreePath path) {
         assert path.getLeaf() instanceof AnnotationTree;
 
         // TODO: handle annotations in trees of kind NEW_CLASS (and add test coverage for this scenario).
@@ -1126,18 +1137,8 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
      * <p>
      * Returns the result of the super implementation otherwise.
      */
-    protected FlowExpressions.Receiver parseExpressionStringLockVisitor(String expression,
-            FlowExpressionContext flowExprContext,
-            TreePath path,
-            Node node, Tree treeForErrorReporting) throws FlowExpressionParseException {
-        Receiver expr = parseExpressionStringStatic(atypeFactory, expression, flowExprContext, path, node, treeForErrorReporting);
-        
-        ensureExpressionIsEffectivelyFinal(expr, expression, treeForErrorReporting);
-
-        return expr;
-    }
-    
-    static FlowExpressions.Receiver parseExpressionStringStatic(AnnotationProvider provider, String expression,
+    @Override
+    public FlowExpressions.Receiver parseExpressionString(String expression,
             FlowExpressionContext flowExprContext,
             TreePath path,
             Node node, Tree treeForErrorReporting) throws FlowExpressionParseException {
@@ -1164,7 +1165,7 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
                 String remainingExpression = itselfReceiverMatcher.group(2);
 
                 if (remainingExpression == null || remainingExpression.isEmpty()) {
-                    expr = FlowExpressions.internalReprOf(provider,
+                    expr = FlowExpressions.internalReprOf(atypeFactory,
                             node);
                 } else {
                     // TODO: The proper way to do this is to call flowExprContext.changeReceiver to set the
@@ -1181,12 +1182,14 @@ public class LockVisitor extends BaseTypeVisitor<LockAnnotatedTypeFactory> {
                 }
             }
         } else {
-            expr = BaseTypeVisitor.parseExpressionString(expression, flowExprContext, path, node, treeForErrorReporting);
+            expr = super.parseExpressionString(expression, flowExprContext, path, node, treeForErrorReporting);
         }
+
+        ensureExpressionIsEffectivelyFinal(expr, expression, treeForErrorReporting);
 
         return expr;
     }
-    
+
     /**
      * Disallows annotations from the @GuardedBy hierarchy on class declarations (other than @GuardedBy({}).
      */

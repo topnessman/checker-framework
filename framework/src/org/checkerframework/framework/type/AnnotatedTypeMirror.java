@@ -559,10 +559,6 @@ public abstract class AnnotatedTypeMirror {
         if (a == null) {
             ErrorReporter.errorAbort("AnnotatedTypeMirror.addAnnotation: null is not a valid annotation.");
         }
-        if (this.getAnnotationInHierarchy(a) != null) {
-            Object o = new Object();
-            o.toString();
-        }
         if (atypeFactory.isSupportedQualifier(a)) {
             this.annotations.add(a);
         } else {
