@@ -359,14 +359,13 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
                     classValues.put(className, newValue);
                 }
             }
-        }
-        else {
+        } else {
             // No other types of expressions need to be stored.
         }
     }
 
     /**
-     * @return Returns true if fieldAcc is an update of a monotonic qualifier to its target qualifier.
+     * @return true if fieldAcc is an update of a monotonic qualifier to its target qualifier.
      * (e.g. @MonotonicNonNull to @NonNull). Always returns false if sequentialSemantics is true.
      */
     protected boolean isMonotonicUpdate(FieldAccess fieldAcc, V value) {
@@ -458,7 +457,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     }
 
     /**
-     * @return Current abstract value of a flow expression, or {@code null} if
+     * @return current abstract value of a flow expression, or {@code null} if
      *         no information is available.
      */
     public /*@Nullable*/ V getValue(FlowExpressions.Receiver expr) {
@@ -486,7 +485,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     }
 
     /**
-     * @return Current abstract value of a field access, or {@code null} if no
+     * @return current abstract value of a field access, or {@code null} if no
      *         information is available.
      */
     public /*@Nullable*/ V getValue(FieldAccessNode n) {
@@ -496,7 +495,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     }
 
     /**
-     * @return Current abstract value of a method call, or {@code null} if no
+     * @return current abstract value of a method call, or {@code null} if no
      *         information is available.
      */
     public /*@Nullable*/ V getValue(MethodInvocationNode n) {
@@ -509,7 +508,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     }
 
     /**
-     * @return Current abstract value of a field access, or {@code null} if no
+     * @return current abstract value of a field access, or {@code null} if no
      *         information is available.
      */
     public /*@Nullable*/ V getValue(ArrayAccessNode n) {
@@ -803,7 +802,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     /* --------------------------------------------------------- */
 
     /**
-     * @return Current abstract value of a local variable, or {@code null} if no
+     * @return current abstract value of a local variable, or {@code null} if no
      *         information is available.
      */
     public /*@Nullable*/ V getValue(LocalVariableNode n) {
@@ -816,7 +815,7 @@ public abstract class CFAbstractStore<V extends CFAbstractValue<V>, S extends CF
     /* --------------------------------------------------------- */
 
     /**
-     * @return Current abstract value of the current object, or {@code null} if no
+     * @return current abstract value of the current object, or {@code null} if no
      *         information is available.
      */
     public /*@Nullable*/ V getValue(ThisLiteralNode n) {

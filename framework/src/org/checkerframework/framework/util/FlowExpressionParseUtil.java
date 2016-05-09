@@ -206,8 +206,7 @@ public class FlowExpressionParseUtil {
             // "this" literal, even after the call above to set s = context.receiver.toString();
             if (context.receiver == null || context.receiver.containsUnknown()) {
                 return new ThisReference(context.receiver == null ? null : context.receiver.getType());
-            }
-            else { // If we already know the receiver, return it.
+            } else { // If we already know the receiver, return it.
                 return context.receiver;
             }
         } else if (superMatcher.matches() && allowSelf) {
@@ -285,8 +284,7 @@ public class FlowExpressionParseUtil {
                     if (originalReceiver) {
                         return new FieldAccess(context.receiver,
                                 fieldType, fieldElem);
-                    }
-                    else {
+                    } else {
                         return new FieldAccess(FlowExpressions.internalReprOf(context.checkerContext.getAnnotationProvider(), new ImplicitThisLiteralNode(receiverType)),
                                 fieldType, fieldElem);
                     }
@@ -620,7 +618,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return The list of parameters that occur in {@code s}, identified by the
+     * @return the list of parameters that occur in {@code s}, identified by the
      *         number of the parameter (starting at 1).
      */
     public static List<Integer> parameterIndices(String s) {
@@ -652,7 +650,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the method {@code node} as
+     * @return a {@link FlowExpressionContext} for the method {@code node} as
      *         seen at the method declaration.
      */
     public static FlowExpressionContext buildFlowExprContextForDeclaration(
@@ -672,7 +670,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the method {@code node} as
+     * @return a {@link FlowExpressionContext} for the method {@code node} as
      *         seen at the method declaration.
      */
     public static FlowExpressionContext buildFlowExprContextForDeclaration(
@@ -691,7 +689,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the method {@code node} as
+     * @return a {@link FlowExpressionContext} for the method {@code node} as
      *         seen at the method declaration.
      */
     public static FlowExpressionContext buildFlowExprContextForDeclaration(
@@ -701,7 +699,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the class {@code classTree} as
+     * @return a {@link FlowExpressionContext} for the class {@code classTree} as
      *         seen at the class declaration.
      */
     public static FlowExpressionContext buildFlowExprContextForDeclaration(
@@ -717,7 +715,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the method {@code n}
+     * @return a {@link FlowExpressionContext} for the method {@code n}
      *         (represented as a {@link Node} as seen at the method use (i.e.,
      *         at a method call site).
      */
@@ -736,7 +734,7 @@ public class FlowExpressionParseUtil {
     }
 
     /**
-     * @return A {@link FlowExpressionContext} for the constructor {@code n}
+     * @return a {@link FlowExpressionContext} for the constructor {@code n}
      *         (represented as a {@link Node} as seen at the method use (i.e.,
      *         at a method call site).
      */
@@ -755,8 +753,7 @@ public class FlowExpressionParseUtil {
 
         if (enclosingMethod != null && !enclosingMethod.getModifiers().getFlags().contains(Modifier.STATIC)) {
             receiver = new ImplicitThisLiteralNode(InternalUtils.typeOf(enclosingClass));
-        }
-        else {
+        } else {
             receiver = new ClassNameNode(enclosingClass);
         }
 
