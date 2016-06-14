@@ -18,21 +18,39 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 
 /**
- * This class functions essentially the same as the jsr308-langtools javac
- * script EXCEPT that it adds the appropriate jdk.jar to the bootclasspath and
- * adds checker.jar to the processor passed to javac.
+ * This class behaves similarly to javac.  CheckerMain does the following:
+ * <ul>
+ *   <li>add the jsr308-langtools’ javac.jar to the runtime bootclasspath
+ *     of the process that runs the Checker Framework.
+ *     This specifies which classes are used to run javac</li>
+ *   <li>add jdk7.jar or jdk8.jar to the compile time bootclasspath
+ *     of the javac argument list passed to javac</li>
+ *   <li>parse and implement any special options used by the Checker Framework,
+ *     e.g., using “shortnames” for annotation processors</li>
+ *   <li>pass all remaining command-line arguments to the real javac</li>
+ * </ul>
+ *
+ * To debug this class, use the {@code -AoutputArgsToFile=FILENAME} command-line argument.
  * <p>
  *
- * To debug it, use the -AoutputArgsToFile=... command-line argument.
+ * "To run the Checker Framework" really means to run java, where the
+ * program being run is a special version of javac, and javac is passed a
+ * -processor command-line argument that mentions a Checker Framework
+ * checker.  There are 5 relevant classpaths:  The classpath and
+ * bootclasspath when running java, and the classpath, bootclasspath, and
+ * processorpath used by javac.  The latter three are the only important
+ * ones.
+ * <p>
+ *
+ * Note for developers: Try to limit the work done (and options
+ * interpreted) by CheckerMain, because its functionality is not available
+ * to users who choose not to use the Checker Framework javac script.
  */
 public class CheckerMain {
 
     /**
-     * Most logic of the CheckerMain main method is delegated to the CheckerMain class.  This method
-     * just determines the relevant parameters to CheckerMain then tells it to invoke the JSR 308
-     * Type Annotations Compiler.
-     * Any exception thrown by the Checker Framework escapes to the command line
-     * @param args command-line arguments, eventually passed to the JSR 308 Type Annotations compiler
+     * Invoke the JSR 308 Type Annotations Compiler.
+     * Any exception thrown by the Checker Framework escapes to the command line.
      */
     public static void main(String[] args)  {
         final File pathToThisJar    = new File(findPathTo(CheckerMain.class, false));
@@ -52,9 +70,13 @@ public class CheckerMain {
     protected final File javacJar;
 
     /**
-     * The paths to the jar containing CheckerMain.class (i.e. checker.jar)
+     * The path to the jar containing CheckerMain.class (i.e. checker.jar)
      */
-    protected final File checkersJar;
+    protected final File checkerJar;
+    /**
+     * The path to checker-qual.jar
+     */
+    protected final File checkerQualJar;
 
 
     private final List<String> compilationBootclasspath;
@@ -65,18 +87,21 @@ public class CheckerMain {
 
     private final List<String> cpOpts;
 
+    private final List<String> ppOpts;
+
     private final List<String> toolOpts;
 
     private final List<File> argListFiles;
 
     /**
-     * Construct all the relevant file locations and java version given the path to this jar and
-     * a set of directories in which to search for jars
+     * Construct all the relevant file locations and Java version given the path to this jar and
+     * a set of directories in which to search for jars.
      */
-    public CheckerMain(final File checkersJar, final String [] args) {
+    public CheckerMain(final File checkerJar, final String [] args) {
 
-        this.checkersJar   = checkersJar;
-        final File searchPath = checkersJar.getParentFile();
+        this.checkerJar   = checkerJar;
+        final File searchPath = checkerJar.getParentFile();
+        this.checkerQualJar   = new File(searchPath, "checker-qual.jar");
 
         final List<String> argsList = new ArrayList<String>(args.length);
         for (String arg : args) {
@@ -96,17 +121,22 @@ public class CheckerMain {
         this.jvmOpts       = extractJvmOpts(argsList);
 
         this.cpOpts        = createCpOpts(argsList);
+        this.ppOpts        = createPpOpts(argsList);
         this.toolOpts      = argsList;
 
         assertValidState();
     }
 
     protected void assertValidState() {
-        assertFilesExist(Arrays.asList(javacJar, jdkJar, checkersJar));
+        assertFilesExist(Arrays.asList(javacJar, jdkJar, checkerJar, checkerQualJar));
     }
 
     public void addToClasspath(List<String> cpOpts) {
         this.cpOpts.addAll(cpOpts);
+    }
+
+    public void addToProcessorpath(List<String> ppOpts) {
+        this.ppOpts.addAll(ppOpts);
     }
 
     public void addToRuntimeBootclasspath(List<String> runtimeBootClasspathOpts) {
@@ -126,7 +156,20 @@ public class CheckerMain {
 
     protected List<String> createCpOpts(final List<String> argsList) {
         final List<String> extractedOps = extractCpOpts(argsList);
-        extractedOps.add(0, this.checkersJar.getAbsolutePath());
+        extractedOps.add(0, this.checkerQualJar.getAbsolutePath());
+        return extractedOps;
+    }
+
+    // Assumes that createCpOpts has already been run.
+    protected List<String> createPpOpts(final List<String> argsList) {
+        final List<String> extractedOps = extractPpOpts(argsList);
+        if (extractedOps.isEmpty()) {
+            // If processorpath is not provided, then javac uses the classpath.
+            // CheckerMain always supplies a processorpath, so if the user
+            // didn't specify a processorpath, then use the classpath.
+            extractedOps.addAll(this.cpOpts);
+        }
+        extractedOps.add(0, this.checkerJar.getAbsolutePath());
         return extractedOps;
     }
 
@@ -222,6 +265,7 @@ public class CheckerMain {
      */
     protected static final Pattern BOOT_CLASS_PATH_REGEX = Pattern.compile("^(?:-J)?-Xbootclasspath/p:(.*)$");
 
+    // TODO: Why does this treat -J and -J-X the same?  They have different semantics, don't they?
     /**
      * Remove all -Xbootclasspath/p: or -J-Xbootclasspath/p: arguments from args and add them to the returned list
      * @param args the arguments to extract from
@@ -259,16 +303,13 @@ public class CheckerMain {
 
         String path = null;
 
-        int i = 0;
-        while (i < args.size()) {
-
-            if (args.get(i).equals("-cp") || args.get(i).equals("-classpath")) {
-                if (args.size() > i) {
+        for (int i=0; i<args.size(); i++) {
+            if ((args.get(i).equals("-cp") || args.get(i).equals("-classpath"))
+                && (i + 1 < args.size())) {
                     args.remove(i);
                     path = args.remove(i);
-                } // else loop ends and we have a dangling -cp.  javac will issue a warning.
-            } else {
-                i++;
+                // re-process whatever is currently at element i
+                i--;
             }
         }
 
@@ -289,6 +330,35 @@ public class CheckerMain {
         return actualArgs;
     }
 
+    /**
+     * Remove the -processorpath options and their arguments from args.
+     * Return the last argument.
+     *
+     * @param args a list of arguments to extract from
+     * @return the arguments that should be put on the processorpath when calling javac.jar
+     */
+    protected static List<String> extractPpOpts(final List<String> args) {
+        List<String> actualArgs = new ArrayList<String>();
+
+        String path = null;
+
+        for (int i=0; i<args.size(); i++) {
+            if (args.get(i).equals("-processorpath")
+                && (i + 1 < args.size())) {
+                args.remove(i);
+                path = args.remove(i);
+                // re-process whatever is currently at element i
+                i--;
+            }
+        }
+
+        if (path != null) {
+            actualArgs.add(path);
+        }
+
+        return actualArgs;
+    }
+
     protected void addMainArgs(final List<String> args) {
         args.add("com.sun.tools.javac.Main");
     }
@@ -297,11 +367,13 @@ public class CheckerMain {
      * Invoke the JSR308 Type Annotations Compiler with all relevant jars on its classpath or boot classpath
      */
     public List<String> getExecArguments() {
-        List<String> args = new ArrayList<String>(jvmOpts.size() + cpOpts.size() + toolOpts.size() + 5);
+        List<String> args = new ArrayList<String>(jvmOpts.size() + cpOpts.size() + toolOpts.size() + 7);
 
         final String java = PluginUtil.getJavaCommand(System.getProperty("java.home"), System.out);
         args.add(java);
 
+        // Prepend ("/p:") because our javac.jar doesn’t have all classes
+        // required by the Java runtime to execute the compiler.
         args.add("-Xbootclasspath/p:" + PluginUtil.join(File.pathSeparator, runtimeBootClasspath));
         args.add("-ea");
         // com.sun.tools needs to be enabled separately
@@ -311,11 +383,23 @@ public class CheckerMain {
 
         addMainArgs(args);
 
+        // No classes on the compilation bootclasspath will be loaded
+        // during compilation, but the classes are read by the compiler
+        // without loading them.  The compiler assumes that any class on
+        // this bootclasspath will be on the bootclasspath of the JVM used
+        // to later run the classfiles that Javac produces.  Our
+        // jdk[78].jar classes don't have bodies, so they won't be used at
+        // run time, but other, real definitions of those classes will be
+        // on the classpath at run time.
         args.add("-Xbootclasspath/p:" + PluginUtil.join(File.pathSeparator, compilationBootclasspath));
 
         if (!argsListHasClassPath(argListFiles)) {
             args.add("-classpath");
             args.add(quote(PluginUtil.join(File.pathSeparator, cpOpts)));
+        }
+        if (!argsListHasProcessorPath(argListFiles)) {
+            args.add("-processorpath");
+            args.add(quote(PluginUtil.join(File.pathSeparator, ppOpts)));
         }
 
         args.addAll(toolOpts);
@@ -392,6 +476,20 @@ public class CheckerMain {
     private static boolean argsListHasClassPath(final List<File> argListFiles) {
         for (final String arg : expandArgFiles(argListFiles)) {
             if (arg.contains("-classpath") || arg.contains("-cp")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns true if some @arglist file sets the processorpath.
+     * @param argListFiles command-line argument files (specified with @ on the command line)
+     */
+    private static boolean argsListHasProcessorPath(final List<File> argListFiles) {
+        for (final String arg : expandArgFiles(argListFiles)) {
+            if (arg.contains("-processorpath")) {
                 return true;
             }
         }
@@ -559,7 +657,7 @@ public class CheckerMain {
     private List<String> getAllCheckerClassNames() {
         ArrayList<String> checkerClassNames = new ArrayList<String>();
         try {
-            final JarInputStream checkerJarIs = new JarInputStream(new FileInputStream(checkersJar));
+            final JarInputStream checkerJarIs = new JarInputStream(new FileInputStream(checkerJar));
             ZipEntry entry;
             while ((entry = checkerJarIs.getNextEntry()) != null) {
                 final String name = entry.getName();
@@ -570,7 +668,7 @@ public class CheckerMain {
             }
             checkerJarIs.close();
         } catch (IOException e) {
-            throw new RuntimeException("Could not read " + checkersJar, e);
+            throw new RuntimeException("Could not read " + checkerJar, e);
         }
 
         return checkerClassNames;

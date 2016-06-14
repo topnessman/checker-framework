@@ -52,9 +52,9 @@ public enum I18nConversionCategory {
      * Use if the parameter can be of number or choice types.
      * An example of choice:
      *
-     * <pre>
-     * format("{0, choice, 0#zero|1#one|1&lt;{0, number} is more than 1}", 2)
-     * </pre>
+     * <pre>{@code
+     * format("{0, choice, 0#zero|1#one|1<{0, number} is more than 1}", 2)
+     * }</pre>
      *
      * This will print "2 is more than 1".
      *
@@ -135,6 +135,30 @@ public enum I18nConversionCategory {
         }
         // this should never happen
         throw new RuntimeException();
+    }
+
+    /**
+     * Returns the union of the two given I18nConversionCategories
+     *
+     * <blockquote>
+     *
+     * <pre>
+     * I18nConversionCategory.intersect(DATE, NUMBER) == DATE;
+     * </pre>
+     *
+     * </blockquote>
+     */
+    public static I18nConversionCategory union(I18nConversionCategory a, I18nConversionCategory b) {
+        if (a == UNUSED || b == UNUSED) {
+            return UNUSED;
+        }
+        if (a == GENERAL || b == GENERAL) {
+            return GENERAL;
+        }
+        if (a == DATE || b == DATE) {
+            return DATE;
+        }
+        return NUMBER;
     }
 
     /**

@@ -143,7 +143,7 @@ public abstract class QualifierHierarchy {
      * <p>
      *
      * This is necessary for determining the type of a conditional
-     * expression (<code>?:</code>), where the type of the expression is the
+     * expression ({@code ?:}), where the type of the expression is the
      * least upper bound of the true and false clauses.
      *
      * @param annos1 first collection of qualifiers
@@ -215,7 +215,7 @@ public abstract class QualifierHierarchy {
         }
 
         assert result.size() == annos1.size() : "QualifierHierarchy.greatestLowerBounds: resulting set has incorrect number of annotations!\n" +
-                "    Set 1: " + annos1 + " Set 2: " + annos2 + " LUB: " + result;
+                "    Set 1: " + annos1 + " Set 2: " + annos2 + " GLB: " + result;
 
         return result;
     }
@@ -294,7 +294,7 @@ public abstract class QualifierHierarchy {
      * <p>
      *
      * This is necessary for determining the type of a conditional
-     * expression (<code>?:</code>), where the type of the expression is the
+     * expression ({@code ?:}), where the type of the expression is the
      * least upper bound of the true and false clauses.
      *
      * <p>
@@ -485,7 +485,7 @@ public abstract class QualifierHierarchy {
      * <p>
      *
      * This is necessary for determining the type of a conditional
-     * expression (<code>?:</code>), where the type of the expression is the
+     * expression ({@code ?:}), where the type of the expression is the
      * least upper bound of the true and false clauses.
      *
      * <p>

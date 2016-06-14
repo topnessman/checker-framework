@@ -18,12 +18,10 @@ import javax.lang.model.util.ElementFilter;
 
 import com.sun.source.tree.AnnotatedTypeTree;
 import com.sun.source.tree.ArrayAccessTree;
-import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BlockTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompoundAssignmentTree;
-import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
@@ -31,12 +29,10 @@ import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
-import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.NewClassTree;
 import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.PrimitiveTypeTree;
-import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.TypeCastTree;
@@ -76,11 +72,28 @@ public final class TreeUtils {
      * @return true iff tree describes a call to super
      */
     public static boolean isSuperCall(MethodInvocationTree tree) {
+        return isNamedMethodCall("super", tree);
+    }
+
+    /**
+     * Checks if the method invocation is a call to this.
+     *
+     * @param tree
+     *            a tree defining a method invocation
+     *
+     * @return true iff tree describes a call to this
+     */
+    public static boolean isThisCall(MethodInvocationTree tree) {
+        return isNamedMethodCall("this", tree);
+
+    }
+
+    protected static boolean isNamedMethodCall(String name, MethodInvocationTree tree) {
         /*@Nullable*/ ExpressionTree mst = tree.getMethodSelect();
         assert mst != null; /*nninvariant*/
 
         if (mst.getKind() == Tree.Kind.IDENTIFIER ) {
-            return ((IdentifierTree)mst).getName().contentEquals("super");
+            return ((IdentifierTree)mst).getName().contentEquals(name);
         }
 
         if (mst.getKind() == Tree.Kind.MEMBER_SELECT) {
@@ -91,7 +104,7 @@ public final class TreeUtils {
             }
 
             return ((IdentifierTree) selectTree.getExpression()).getName()
-                .contentEquals("super");
+                    .contentEquals(name);
         }
 
         return false;
@@ -330,31 +343,39 @@ public final class TreeUtils {
      *   <li>VariableTree</li>
      * </ul>
      *
-     * If the leaf is a ConditionalExpressionTree, then recur on the leaf.
+     * If the leaf is a ConditionalExpressionTree or ParenthesizedTree, then recur on the leaf.
      *
      * Otherwise, null is returned.
      *
      * @return  the assignment context as described
      */
     public static Tree getAssignmentContext(final TreePath treePath) {
-        TreePath path = treePath.getParentPath();
+        TreePath parentPath = treePath.getParentPath();
 
-        if (path == null) {
+        if (parentPath == null) {
             return null;
         }
-        Tree node = path.getLeaf();
-        if ((node instanceof AssignmentTree) ||
-                (node instanceof CompoundAssignmentTree) ||
-                (node instanceof MethodInvocationTree) ||
-                (node instanceof NewArrayTree) ||
-                (node instanceof NewClassTree) ||
-                (node instanceof ReturnTree) ||
-                (node instanceof VariableTree)) {
-            return node;
-        } else if (node instanceof ConditionalExpressionTree) {
-            return getAssignmentContext(path);
+
+        Tree parent = parentPath.getLeaf();
+        switch (parent.getKind()) {
+        case PARENTHESIZED:
+        case CONDITIONAL_EXPRESSION:
+            return getAssignmentContext(parentPath);
+        case ASSIGNMENT:
+        case METHOD_INVOCATION:
+        case NEW_ARRAY:
+        case NEW_CLASS:
+        case RETURN:
+        case VARIABLE:
+            return parent;
+        default:
+            // 11 Tree.Kinds are CompoundAssignmentTrees,
+            // so use instanceof rather than listing all 11.
+            if (parent instanceof CompoundAssignmentTree) {
+                return parent;
+            }
+            return null;
         }
-        return null;
     }
 
     /**
@@ -726,7 +747,7 @@ public final class TreeUtils {
     }
 
     /**
-     * Determine whether <code>tree</code> is a class literal, such
+     * Determine whether {@code tree} is a class literal, such
      * as
      *
      * <pre>
@@ -743,7 +764,7 @@ public final class TreeUtils {
     }
 
     /**
-     * Determine whether <code>tree</code> is a field access expressions, such
+     * Determine whether {@code tree} is a field access expressions, such
      * as
      *
      * <pre>
@@ -771,11 +792,11 @@ public final class TreeUtils {
     }
 
     /**
-     * Compute the name of the field that the field access <code>tree</code>
-     * accesses. Requires <code>tree</code> to be a field access, as determined
-     * by <code>isFieldAccess</code>.
+     * Compute the name of the field that the field access {@code tree}
+     * accesses. Requires {@code tree} to be a field access, as determined
+     * by {@code isFieldAccess}.
      *
-     * @return the name of the field accessed by <code>tree</code>.
+     * @return the name of the field accessed by {@code tree}.
      */
     public static String getFieldName(Tree tree) {
         assert isFieldAccess(tree);
@@ -789,7 +810,7 @@ public final class TreeUtils {
     }
 
     /**
-     * Determine whether <code>tree</code> refers to a method element, such
+     * Determine whether {@code tree} refers to a method element, such
      * as
      *
      * <pre>
@@ -823,11 +844,11 @@ public final class TreeUtils {
     }
 
     /**
-     * Compute the name of the method that the method access <code>tree</code>
-     * accesses. Requires <code>tree</code> to be a method access, as determined
-     * by <code>isMethodAccess</code>.
+     * Compute the name of the method that the method access {@code tree}
+     * accesses. Requires {@code tree} to be a method access, as determined
+     * by {@code isMethodAccess}.
      *
-     * @return the name of the method accessed by <code>tree</code>.
+     * @return the name of the method accessed by {@code tree}.
      */
     public static String getMethodName(Tree tree) {
         assert isMethodAccess(tree);

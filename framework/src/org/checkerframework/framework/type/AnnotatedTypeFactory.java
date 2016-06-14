@@ -5,6 +5,10 @@ import org.checkerframework.checker.interning.qual.*;
 import org.checkerframework.checker.nullness.qual.Nullable;
 */
 
+// The imports from com.sun, but they are all
+// @jdk.Exported and therefore somewhat safe to use.
+// Try to avoid using non-@jdk.Exported classes.
+
 import org.checkerframework.common.basetype.BaseTypeChecker;
 import org.checkerframework.common.reflection.DefaultReflectionResolver;
 import org.checkerframework.common.reflection.MethodValAnnotatedTypeFactory;
@@ -58,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -87,9 +92,6 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic.Kind;
 
-// The following imports are from com.sun, but they are all
-//@jdk.Exported and therefore somewhat safe to use.
-// Try to avoid using non-@jdk.Exported classes.
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.ClassTree;
@@ -134,8 +136,8 @@ import com.sun.tools.javac.util.Context;
  * Type system checker writers may need to subclass this class, to add implicit
  * and default qualifiers according to the type system semantics. Subclasses
  * should especially override
- * {@link AnnotatedTypeFactory#annotateImplicit(Element, AnnotatedTypeMirror)}
- * and {@link #annotateImplicit(Tree, AnnotatedTypeMirror)}.
+ * {@link AnnotatedTypeFactory#addComputedTypeAnnotations(Element, AnnotatedTypeMirror)}
+ * and {@link #addComputedTypeAnnotations(Tree, AnnotatedTypeMirror)}.
  *
  * @checker_framework.manual #writing-a-checker How to write a checker plug-in
  */
@@ -335,6 +337,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         this.loader = new AnnotationClassLoader(checker);
         this.supportedQuals = createSupportedTypeQualifiers();
+        checkSupportedQuals();
 
         this.fromByteCode = AnnotationUtils.fromClass(elements, FromByteCode.class);
         this.fromStubFile = AnnotationUtils.fromClass(elements, FromStubFile.class);
@@ -362,6 +365,42 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             checkInvalidOptionsInferSignatures();
             wholeProgramInference = new WholeProgramInferenceScenes(
                     !"NullnessAnnotatedTypeFactory".equals(this.getClass().getSimpleName()));
+        }
+    }
+
+    /**
+     * Issue an error and abort if any of the support qualifiers have @Target meta-annotations
+     * that contain something besides TYPE_USE or TYPE_PARAMETER. (@Target({}) is allowed)
+     */
+    private void checkSupportedQuals() {
+        for (Class<? extends Annotation> annotationClass : supportedQuals) {
+            ElementType[] elements = annotationClass.getAnnotation(Target.class).value();
+            List<ElementType> otherElementTypes = new ArrayList<>();
+            for (ElementType element : elements) {
+                if (!(element.equals(ElementType.TYPE_USE)
+                        || element.equals(ElementType.TYPE_PARAMETER))) {
+                    // if there's an ElementType with an enumerated value of something other
+                    // than TYPE_USE or TYPE_PARAMETER then it isn't a valid qualifier
+                    otherElementTypes.add(element);
+                }
+            }
+            if (!otherElementTypes.isEmpty()) {
+                StringBuffer buf = new StringBuffer("The @Target meta-annotation on type qualifier ");
+                buf.append(annotationClass.toString());
+                buf.append(" must not contain ");
+                for (int i = 0; i < otherElementTypes.size(); i++) {
+                    if (i == 1 && otherElementTypes.size() == 2) {
+                        buf.append(" or ");
+                    } else if (i == otherElementTypes.size() - 1) {
+                        buf.append(", or ");
+                    } else if (i != 0) {
+                        buf.append(", ");
+                    }
+                    buf.append(otherElementTypes.get(i));
+                }
+                buf.append(".");
+                ErrorReporter.errorAbort(buf.toString());
+            }
         }
     }
 
@@ -873,7 +912,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         AnnotatedTypeMirror type = fromElement(elt);
         // Implicits due to writing annotation on the class declaration.
         annotateInheritedFromClass(type);
-        annotateImplicit(elt, type);
+        addComputedTypeAnnotations(elt, type);
         return type;
     }
 
@@ -917,7 +956,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             type = null; // dead code
         }
 
-        annotateImplicit(tree, type);
+        addComputedTypeAnnotations(tree, type);
 
         if (TreeUtils.isClassTree(tree) ||
             tree.getKind() == Tree.Kind.METHOD) {
@@ -947,7 +986,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     protected void postProcessClassTree(ClassTree tree) {
         TypesIntoElements.store(processingEnv, this, tree);
         DeclarationsIntoElements.store(processingEnv, this, tree);
-        if (checker.getOptions().containsKey("infer") && wholeProgramInference != null) {
+        if (checker.hasOption("infer") && wholeProgramInference != null) {
             // Write scenes into .jaif files. In order to perform the write
             // operation only once for each .jaif file, the best location to
             // do so is here.
@@ -972,7 +1011,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             return null; // dead code
         }
         AnnotatedTypeMirror type = fromTypeTree(tree);
-        annotateImplicit(tree, type);
+        addComputedTypeAnnotations(tree, type);
         return type;
     }
 
@@ -1198,8 +1237,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param tree an AST node
      * @param type the type obtained from {@code tree}
      */
-    // TODO: rename the method; it's not just implicits, but also defaulting, etc.
-    protected void annotateImplicit(Tree tree, AnnotatedTypeMirror type) {
+    protected void addComputedTypeAnnotations(Tree tree, AnnotatedTypeMirror type) {
         // Pass.
     }
 
@@ -1211,7 +1249,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param elt an element
      * @param type the type obtained from {@code elt}
      */
-    protected void annotateImplicit(Element elt, AnnotatedTypeMirror type) {
+    protected void addComputedTypeAnnotations(Element elt, AnnotatedTypeMirror type) {
         // Pass.
     }
 
@@ -1253,7 +1291,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     public void postAsMemberOf(AnnotatedTypeMirror type,
             AnnotatedTypeMirror owner, Element element) {
-        annotateImplicit(element, type);
+        addComputedTypeAnnotations(element, type);
     }
 
     /**
@@ -1279,18 +1317,19 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * In some type systems, the upper bounds depend on the instantiation
      * of the class. For example, in the Generic Universe Type system,
      * consider a class declaration
-     * <pre>   class C&lt;X extends @Peer Object&gt; </pre>
+     * <pre>{@code   class C<X extends @Peer Object> }</pre>
      * then the instantiation
-     * <pre>   @Rep C&lt;@Rep Object&gt; </pre>
+     * <pre>{@code   @Rep C<@Rep Object> }</pre>
      * is legal. The upper bounds of class C have to be adapted
      * by the main modifier.
      * <p>
      * An example of an adaptation follows.  Suppose, I have a declaration:
-     * class MyClass&lt;E extends List&lt;E&gt;&gt;
+     * <pre>{@code  class MyClass<E extends List<E>>}</pre>
      * And an instantiation:
-     * new MyClass&lt;@NonNull String&gt;()
+     * <pre>{@code  new MyClass<@NonNull String>()}</pre>
      * <p>
-     * The upper bound of E adapted to the argument String, would be List&lt;@NonNull String&gt;
+     * The upper bound of E adapted to the argument String, would be
+     * {@code List<@NonNull String>}
      * and the lower bound would be an AnnotatedNullType.
      * <p>
      * TODO: ensure that this method is consistently used instead
@@ -1871,7 +1910,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
     public Pair<AnnotatedExecutableType, List<AnnotatedTypeMirror>> constructorFromUse(NewClassTree tree) {
         ExecutableElement ctor = InternalUtils.constructor(tree);
         AnnotatedTypeMirror type = fromNewClass(tree);
-        annotateImplicit(tree.getIdentifier(), type);
+        addComputedTypeAnnotations(tree.getIdentifier(), type);
         AnnotatedExecutableType con = AnnotatedTypes.asMemberOf(types, this, type, ctor);
 
         if (tree.getArguments().size() == con.getParameterTypes().size() + 1
@@ -1931,28 +1970,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param newClassTree NewClassTree
      * @return AnnotatedDeclaredType
      */
-    protected final AnnotatedDeclaredType fromNewClass(NewClassTree newClassTree) {
-        AnnotatedDeclaredType type;
-        if (!TreeUtils.isDiamondTree(newClassTree)) {
-            // If newClassTree does not create anonymous class,
-            // newClassTree.getIdentifier includes the explicit annotations in this location:
-            //   new @HERE Class()
-            type = (AnnotatedDeclaredType) fromTypeTree(newClassTree.getIdentifier());
-        } else {
-            type = (AnnotatedDeclaredType) toAnnotatedType(InternalUtils.typeOf(newClassTree), false);
-        }
-
-        if (newClassTree.getClassBody() != null) {
-            // If newClassTree creates an anonymous class, then annotations in this location:
-            //   new @HERE Class() {}
-            // are on not on the identifier newClassTree, but rather on the modifier newClassTree.
-            List<? extends AnnotationTree> annos = newClassTree.getClassBody().getModifiers().getAnnotations();
-            // Replace the annotation because a different annotation could have been
-            // inherited from the class declaration.
-            type.replaceAnnotations(InternalUtils.annotationsFromTypeAnnotationTrees(annos));
-        }
-
+    public final AnnotatedDeclaredType fromNewClass(NewClassTree newClassTree) {
         if (TreeUtils.isDiamondTree(newClassTree)) {
+            AnnotatedDeclaredType type = (AnnotatedDeclaredType)
+                    toAnnotatedType(InternalUtils.typeOf(newClassTree), false);
             if (((com.sun.tools.javac.code.Type)type.actualType).tsym.getTypeParameters().nonEmpty()) {
                 Pair<Tree, AnnotatedTypeMirror> ctx = this.visitorState.getAssignmentContext();
                 if (ctx != null) {
@@ -1960,9 +1981,22 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                     fromNewClassContextHelper(type, ctxtype);
                 }
             }
+            return type;
+        } else if (newClassTree.getClassBody() != null) {
+            AnnotatedDeclaredType type =
+                    (AnnotatedDeclaredType) toAnnotatedType(InternalUtils.typeOf(newClassTree), false);
+            // If newClassTree creates an anonymous class, then annotations in this location:
+            //   new @HERE Class() {}
+            // are on not on the identifier newClassTree, but rather on the modifier newClassTree.
+            List<? extends AnnotationTree> annos = newClassTree.getClassBody().getModifiers().getAnnotations();
+            type.addAnnotations(InternalUtils.annotationsFromTypeAnnotationTrees(annos));
+            return type;
+        } else {
+            // If newClassTree does not create anonymous class,
+            // newClassTree.getIdentifier includes the explicit annotations in this location:
+            //   new @HERE Class()
+            return (AnnotatedDeclaredType) fromTypeTree(newClassTree.getIdentifier());
         }
-
-        return type;
     }
 
     // This method extracts the ugly hacky parts.
@@ -2807,12 +2841,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
                 AnnotatedTypes.overriddenMethods(elements, this, elt);
 
         if (overriddenMethods != null) {
-            for (Map.Entry<AnnotatedDeclaredType, ExecutableElement> pair : overriddenMethods.entrySet()) {
-                // Getting annotations from super implementation.
-                AnnotatedDeclaredType overriddenType = pair.getKey();
-                AnnotatedExecutableType overriddenMethod =
-                        AnnotatedTypes.asMemberOf(types, this, overriddenType, pair.getValue());
-                ExecutableElement superElt = overriddenMethod.getElement();
+            for ( ExecutableElement superElt : overriddenMethods.values()) {
                 Set<AnnotationMirror> superAnnos = getDeclAnnotations(superElt);
 
                 for (AnnotationMirror annotation : superAnnos) {

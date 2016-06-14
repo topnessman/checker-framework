@@ -88,20 +88,20 @@ public class InterningAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     }
 
     @Override
-    public void annotateImplicit(Tree tree, AnnotatedTypeMirror type, boolean useFlow) {
+    public void addComputedTypeAnnotations(Tree tree, AnnotatedTypeMirror type, boolean useFlow) {
         Element element = InternalUtils.symbol(tree);
         if (!type.isAnnotatedInHierarchy(INTERNED) && ElementUtils.isCompileTimeConstant(element)) {
             type.addAnnotation(INTERNED);
         }
-        super.annotateImplicit(tree, type, useFlow);
+        super.addComputedTypeAnnotations(tree, type, useFlow);
     }
 
     @Override
-    public void annotateImplicit(Element element, AnnotatedTypeMirror type) {
+    public void addComputedTypeAnnotations(Element element, AnnotatedTypeMirror type) {
         if (!type.isAnnotatedInHierarchy(INTERNED) && ElementUtils.isCompileTimeConstant(element)) {
             type.addAnnotation(INTERNED);
         }
-        super.annotateImplicit(element, type);
+        super.addComputedTypeAnnotations(element, type);
     }
 
     /**
@@ -172,7 +172,7 @@ public class InterningAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     }
 
     /**
-     * Unbox type and replace any interning type annotatiosn with @Interned since all
+     * Unbox type and replace any interning type annotations with @Interned since all
      * all primitives can safely use ==. See case 4 in the class comments.
      */
     @Override
