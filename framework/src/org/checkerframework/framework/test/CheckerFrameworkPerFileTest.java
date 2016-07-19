@@ -1,17 +1,19 @@
 package org.checkerframework.framework.test;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import static org.checkerframework.framework.test.TestConfigurationBuilder.buildDefaultConfiguration;
 
-import javax.annotation.processing.AbstractProcessor;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import static org.checkerframework.framework.test.TestConfigurationBuilder.buildDefaultConfiguration;
+import javax.annotation.processing.AbstractProcessor;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 
 /**
+ * Compiles all test files individually. Use {@link CheckerFrameworkPerDirectoryTest}
+ * to compile all files in a test directory together.
+ *
  * To use this class you must do two things:
  * <ol>
  * <li> Create exactly 1 constructor in the subclass with exactly 1 argument
@@ -40,10 +42,10 @@ import static org.checkerframework.framework.test.TestConfigurationBuilder.build
  * <li>
  * {@code @Parameters public static List<File> getTestFiles() }
  * <p>
-
+ *
  * The method returns a List of Java files. There are methods like
  * {@link TestUtilities#findNestedJavaTestFiles} to help you construct this
- * List. The TestSuite will then instantiate the subclass once for each
+ * List. The PerDirectorySuite will then instantiate the subclass once for each
  * file returned by getTestFiles and execute the run method.
  * An example of this method is:
  *
@@ -55,8 +57,8 @@ import static org.checkerframework.framework.test.TestConfigurationBuilder.build
  * </ul>
  * </ol>
  */
-@RunWith(TestSuite.class)
-public abstract class CheckerFrameworkTest {
+@RunWith(PerFileSuite.class)
+public abstract class CheckerFrameworkPerFileTest {
 
     protected final File testFile;
 
@@ -76,9 +78,11 @@ public abstract class CheckerFrameworkTest {
      * @param testDir the path to the directory of test inputs
      * @param checkerOptions options to pass to the compiler when running tests
      */
-    public CheckerFrameworkTest(File testFile,
-                                Class<? extends AbstractProcessor> checker,
-                                String testDir, String... checkerOptions) {
+    public CheckerFrameworkPerFileTest(
+            File testFile,
+            Class<? extends AbstractProcessor> checker,
+            String testDir,
+            String... checkerOptions) {
         this.testFile = testFile;
         this.checkerName = checker.getName();
         this.testDir = "tests" + File.separator + testDir;
@@ -88,9 +92,11 @@ public abstract class CheckerFrameworkTest {
     @Test
     public void run() {
         boolean shouldEmitDebugInfo = TestUtilities.getShouldEmitDebugInfo();
-        List<String> customizedOptions = customizeOptions(Collections.unmodifiableList(checkerOptions));
-        TestConfiguration config = buildDefaultConfiguration(testDir, testFile, checkerName, customizedOptions,
-                                                             shouldEmitDebugInfo);
+        List<String> customizedOptions =
+                customizeOptions(Collections.unmodifiableList(checkerOptions));
+        TestConfiguration config =
+                buildDefaultConfiguration(
+                        testDir, testFile, checkerName, customizedOptions, shouldEmitDebugInfo);
         TypecheckResult testResult = new TypecheckExecutor().runTest(config);
         TestUtilities.assertResultsAreValid(testResult);
     }
@@ -102,7 +108,7 @@ public abstract class CheckerFrameworkTest {
      * <p>
      *
      * If you want to specify the same command-line option for all tests of
-     * a particular checker, then pass it to the {@link #CheckerFrameworkTest}
+     * a particular checker, then pass it to the {@link CheckerFrameworkPerFileTest}
      * constructor.
      *
      * @param previousOptions the options specified in the constructor of the test
@@ -112,5 +118,4 @@ public abstract class CheckerFrameworkTest {
     public List<String> customizeOptions(List<String> previousOptions) {
         return previousOptions;
     }
-
 }

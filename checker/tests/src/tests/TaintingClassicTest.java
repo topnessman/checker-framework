@@ -1,14 +1,15 @@
 package tests;
 
-import org.checkerframework.framework.test.CheckerFrameworkTest;
+import java.io.File;
+import java.util.List;
+import org.checkerframework.framework.test.CheckerFrameworkPerDirectoryTest;
 import org.junit.runners.Parameterized.Parameters;
 
-import java.io.File;
+public class TaintingClassicTest extends CheckerFrameworkPerDirectoryTest {
 
-public class TaintingClassicTest extends CheckerFrameworkTest {
-
-    public TaintingClassicTest(File testFile) {
-        super(testFile,
+    public TaintingClassicTest(List<File> testFiles) {
+        super(
+                testFiles,
                 org.checkerframework.checker.tainting.classic.TaintingClassicChecker.class,
                 "tainting_classic",
                 "-Anomsgtext");
@@ -16,6 +17,6 @@ public class TaintingClassicTest extends CheckerFrameworkTest {
 
     @Parameters
     public static String[] getTestDirs() {
-        return new String[]{"tainting_classic", "all-systems"};
+        return new String[] {"tainting_classic", "all-systems"};
     }
 }

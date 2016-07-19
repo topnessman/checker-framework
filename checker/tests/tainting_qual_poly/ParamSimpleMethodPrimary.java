@@ -2,7 +2,7 @@
 import org.checkerframework.checker.tainting.qual.*;
 
 // Test method qual params with primary variable
-abstract class Test {
+abstract class ParamSimpleMethodPrimary {
     @MethodTaintingParam
     abstract @Var Integer test(@Var Integer i, @Var Integer j);
 
@@ -13,9 +13,11 @@ abstract class Test {
     }
 
     abstract @Tainted Integer makeTainted();
+
     abstract @Untainted Integer makeUntainted();
 
     abstract void takeTainted(@Tainted Integer o);
+
     abstract void takeUntainted(@Untainted Integer o);
 
     void test() {

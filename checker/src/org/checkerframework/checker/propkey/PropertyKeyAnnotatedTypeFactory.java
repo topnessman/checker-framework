@@ -1,14 +1,21 @@
 package org.checkerframework.checker.propkey;
 
+import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.CompoundAssignmentTree;
+import com.sun.source.tree.LiteralTree;
+import com.sun.source.tree.Tree;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
-import java.util.*;
-
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Set;
 import javax.lang.model.element.AnnotationMirror;
 import javax.tools.Diagnostic.Kind;
-
 import org.checkerframework.checker.propkey.qual.PropertyKey;
 import org.checkerframework.checker.propkey.qual.PropertyKeyBottom;
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
@@ -21,11 +28,6 @@ import org.checkerframework.framework.type.treeannotator.TreeAnnotator;
 import org.checkerframework.framework.util.GraphQualifierHierarchy;
 import org.checkerframework.framework.util.MultiGraphQualifierHierarchy.MultiGraphFactory;
 import org.checkerframework.javacutil.AnnotationUtils;
-
-import com.sun.source.tree.BinaryTree;
-import com.sun.source.tree.CompoundAssignmentTree;
-import com.sun.source.tree.LiteralTree;
-import com.sun.source.tree.Tree;
 
 /**
  * This AnnotatedTypeFactory adds PropertyKey annotations to String literals
@@ -69,7 +71,8 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
     protected class KeyLookupTreeAnnotator extends TreeAnnotator {
         AnnotationMirror theAnnot;
 
-        public KeyLookupTreeAnnotator(BaseAnnotatedTypeFactory atf, Class<? extends Annotation> annot) {
+        public KeyLookupTreeAnnotator(
+                BaseAnnotatedTypeFactory atf, Class<? extends Annotation> annot) {
             super(atf);
             theAnnot = AnnotationUtils.fromClass(elements, annot);
         }
@@ -77,8 +80,8 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         @Override
         public Void visitLiteral(LiteralTree tree, AnnotatedTypeMirror type) {
             if (!type.isAnnotatedInHierarchy(theAnnot)
-                && tree.getKind() == Tree.Kind.STRING_LITERAL
-                && strContains(lookupKeys, tree.getValue().toString())) {
+                    && tree.getKind() == Tree.Kind.STRING_LITERAL
+                    && strContains(lookupKeys, tree.getValue().toString())) {
                 type.addAnnotation(theAnnot);
             }
             // A possible extension is to record all the keys that have been used and
@@ -125,7 +128,6 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         } while (true);
     }
 
-
     /**
      * Returns a set of the valid keys that can be used.
      */
@@ -137,10 +139,10 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         Set<String> result = new HashSet<String>();
 
         if (checker.hasOption("propfiles")) {
-            result.addAll( keysOfPropertyFiles(checker.getOption("propfiles")) );
+            result.addAll(keysOfPropertyFiles(checker.getOption("propfiles")));
         }
         if (checker.hasOption("bundlenames")) {
-            result.addAll( keysOfResourceBundle(checker.getOption("bundlenames")) );
+            result.addAll(keysOfResourceBundle(checker.getOption("bundlenames")));
         }
 
         return result;
@@ -195,7 +197,8 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
                 // TODO: is there a nicer way to report messages, that are not
                 // connected to an AST node?
                 // One cannot use report, because it needs a node.
-                checker.message(Kind.WARNING, "Exception in PropertyKeyChecker.keysOfPropertyFile: " + e);
+                checker.message(
+                        Kind.WARNING, "Exception in PropertyKeyChecker.keysOfPropertyFile: " + e);
                 e.printStackTrace();
             }
         }
@@ -207,7 +210,8 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         String[] namesArr = bundleNames.split(":");
 
         if (namesArr == null) {
-            checker.message(Kind.WARNING, "Couldn't parse the resource bundles: <" + bundleNames + ">");
+            checker.message(
+                    Kind.WARNING, "Couldn't parse the resource bundles: <" + bundleNames + ">");
             return Collections.emptySet();
         }
 
@@ -216,8 +220,13 @@ public class PropertyKeyAnnotatedTypeFactory extends BaseAnnotatedTypeFactory {
         for (String bundleName : namesArr) {
             ResourceBundle bundle = ResourceBundle.getBundle(bundleName);
             if (bundle == null) {
-                checker.message(Kind.WARNING, "Couldn't find the resource bundle: <" + bundleName
-                    + "> for locale <" + Locale.getDefault() + ">");
+                checker.message(
+                        Kind.WARNING,
+                        "Couldn't find the resource bundle: <"
+                                + bundleName
+                                + "> for locale <"
+                                + Locale.getDefault()
+                                + ">");
                 continue;
             }
 

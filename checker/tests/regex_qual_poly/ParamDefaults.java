@@ -3,27 +3,31 @@ import org.checkerframework.checker.regex.qual.*;
 import org.checkerframework.qualframework.poly.qual.Wildcard;
 
 @ClassRegexParam("Main")
-class A {
-    public @Var(arg="Main", param="Main2") B z;
+class PdA {
+    public @Var(arg = "Main", param = "Main2") B z;
 }
 
 @ClassRegexParam("Main2")
-class B { }
+class B {}
 
-abstract class Test {
-    // Defaults to A<<?>> (? is the top of the containment hierarchy, so A<<?>>
-    // is the top of the hierarchy of instantiations of A).
-    abstract A make();
-    abstract @Regex(param="Main") A makeTainted();
+abstract class ParamDefaults {
+    // Defaults to PdA<<?>> (? is the top of the containment hierarchy, so PdA<<?>>
+    // is the top of the hierarchy of instantiations of PdA).
+    abstract PdA make();
 
-    abstract void takeTainted(@Regex(param="Main2") B o);
-    abstract void takeUntainted(@Regex(value=1, param="Main2") B o);
+    abstract @Regex(param = "Main") PdA makeTainted();
+
+    abstract void takeTainted(@Regex(param = "Main2") B o);
+
+    abstract void takeUntainted(@Regex(value = 1, param = "Main2") B o);
+
     abstract void take(B o);
-    abstract void takeA(A a);
+
+    abstract void takePdA(PdA a);
 
     void test() {
-        A a = make();
-        @Regex(param="Main") A ta = makeTainted();
+        PdA a = make();
+        @Regex(param = "Main") PdA ta = makeTainted();
 
         //:: error: (argument.type.incompatible)
         takeUntainted(a.z);
@@ -31,7 +35,7 @@ abstract class Test {
         takeTainted(a.z);
         take(a.z);
 
-        takeA(a);
-        takeA(ta);
+        takePdA(a);
+        takePdA(ta);
     }
 }

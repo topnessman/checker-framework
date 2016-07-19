@@ -1,8 +1,8 @@
 package tests;
 
 import java.io.File;
-
-import org.checkerframework.framework.test.CheckerFrameworkTest;
+import java.util.List;
+import org.checkerframework.framework.test.CheckerFrameworkPerDirectoryTest;
 import org.junit.runners.Parameterized.Parameters;
 
 /**
@@ -15,16 +15,19 @@ import org.junit.runners.Parameterized.Parameters;
  * @author plvines
  *
  */
-public class ValueTest extends CheckerFrameworkTest {
+public class ValueTest extends CheckerFrameworkPerDirectoryTest {
 
-    public ValueTest(File testFile) {
-        super(testFile, org.checkerframework.common.value.ValueChecker.class,
-                "value", "-Anomsgtext", "-Astubs=statically-executable.astub");
+    public ValueTest(List<File> testFiles) {
+        super(
+                testFiles,
+                org.checkerframework.common.value.ValueChecker.class,
+                "value",
+                "-Anomsgtext",
+                "-Astubs=statically-executable.astub");
     }
 
-
     @Parameters
-    public static String [] getTestDirs() {
-        return new String[] { "value", "all-systems" };
+    public static String[] getTestDirs() {
+        return new String[] {"value", "all-systems"};
     }
 }

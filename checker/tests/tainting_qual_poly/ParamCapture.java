@@ -2,9 +2,11 @@
 // Test that capture conversion occurs.
 import org.checkerframework.checker.tainting.qual.*;
 
-abstract class Test {
+abstract class ParamCapture {
     abstract void takeOne(@PolyTainted Integer i);
+
     abstract void takeSame(@PolyTainted Integer i, @PolyTainted Integer j);
+
     abstract @Wild Integer makeInt();
 
     void test() {

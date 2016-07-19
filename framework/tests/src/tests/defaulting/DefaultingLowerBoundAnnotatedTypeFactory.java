@@ -5,10 +5,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-
 import org.checkerframework.common.basetype.BaseAnnotatedTypeFactory;
 import org.checkerframework.common.basetype.BaseTypeChecker;
-
 import tests.defaulting.LowerBoundQual.LB_BOTTOM;
 import tests.defaulting.LowerBoundQual.LB_EXPLICIT;
 import tests.defaulting.LowerBoundQual.LB_IMPLICIT;
@@ -23,8 +21,7 @@ public class DefaultingLowerBoundAnnotatedTypeFactory extends BaseAnnotatedTypeF
 
     @Override
     protected Set<Class<? extends Annotation>> createSupportedTypeQualifiers() {
-        return Collections.unmodifiableSet(
-                new HashSet<Class<? extends Annotation>>(
-                        Arrays.asList(LB_TOP.class, LB_EXPLICIT.class, LB_IMPLICIT.class, LB_BOTTOM.class)));
+        return new HashSet<Class<? extends Annotation>>(
+                Arrays.asList(LB_TOP.class, LB_EXPLICIT.class, LB_IMPLICIT.class, LB_BOTTOM.class));
     }
 }

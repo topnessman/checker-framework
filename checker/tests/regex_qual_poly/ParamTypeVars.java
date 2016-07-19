@@ -4,24 +4,32 @@ import org.checkerframework.qualframework.poly.qual.Wildcard;
 
 // Type variables and post-as-member-of
 @ClassRegexParam("Param1")
-class List<T> {
+class ListLinked<T> {
     // (T + MAIN) head
-    @Var(arg="Param1", param="Param2") T head;
-    // List<T><<MAIN>>
-    @Var(arg="Param1", param="Param1") List<T> tail;
+    @Var(arg = "Param1", param = "Param2") T head;
+    // ListLinked<T><<MAIN>>
+    @Var(arg = "Param1", param = "Param1") ListLinked<T> tail;
 }
 
 @ClassRegexParam("Param2")
-class A { }
+class TypeVarsA {}
 
-abstract class Test {
-    abstract @Regex(param="Param1")   List<@Regex(param="Param2")   A> makeTT();
-    abstract @Regex(value=1, param="Param1") List<@Regex(param="Param2")   A> makeUT();
-    abstract @Regex(param="Param1")   List<@Regex(value=1, param="Param2") A> makeTU();
-    abstract @Regex(value=1, param="Param1") List<@Regex(value=1, param="Param2") A> makeUU();
+abstract class ParamTypeVars {
+    abstract @Regex(param = "Param1") ListLinked<@Regex(param = "Param2") TypeVarsA> makeTT();
 
-    abstract void takeT(@Regex(param="Param2")   A x);
-    abstract void takeU(@Regex(value=1, param="Param2") A x);
+    abstract @Regex(value = 1, param = "Param1") ListLinked<@Regex(param = "Param2") TypeVarsA>
+            makeUT();
+
+    abstract @Regex(param = "Param1") ListLinked<@Regex(value = 1, param = "Param2") TypeVarsA>
+            makeTU();
+
+    abstract @Regex(value = 1, param = "Param1") ListLinked<
+                    @Regex(value = 1, param = "Param2") TypeVarsA>
+            makeUU();
+
+    abstract void takeT(@Regex(param = "Param2") TypeVarsA x);
+
+    abstract void takeU(@Regex(value = 1, param = "Param2") TypeVarsA x);
 
     void test() {
         takeT(makeTT().head);
