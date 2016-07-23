@@ -204,7 +204,10 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      */
     protected TypeArgumentInference typeArgumentInference;
 
-    /** To cache the supported type qualifiers. */
+    /** To cache the supported type qualifiers.
+     * call {@link #getSupportedTypeQualifiers()} instead of using this field
+     * directly, as it may not have been initialized.
+     */
     private final Set<Class<? extends Annotation>> supportedQuals;
 
     /** Types read from stub files (but not those from the annotated JDK jar file). */
