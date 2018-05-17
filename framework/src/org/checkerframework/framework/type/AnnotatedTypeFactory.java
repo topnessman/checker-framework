@@ -2143,7 +2143,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         if (viewpointAdapter != null) {
-            con = viewpointAdapter.viewpointAdaptConstructor(type, con);
+            viewpointAdapter.viewpointAdaptConstructor(ctor, type, con);
         }
 
         List<AnnotatedTypeMirror> typeargs = new LinkedList<AnnotatedTypeMirror>();
