@@ -1481,8 +1481,8 @@ public abstract class GenericAnnotatedTypeFactory<
 
     @Override
     public List<AnnotatedTypeParameterBounds> typeVariablesFromUse(
-            AnnotatedDeclaredType type, TypeElement element, Tree tree) {
-        List<AnnotatedTypeParameterBounds> f = super.typeVariablesFromUse(type, element, tree);
+            AnnotatedDeclaredType type, TypeElement element) {
+        List<AnnotatedTypeParameterBounds> f = super.typeVariablesFromUse(type, element);
         if (dependentTypesHelper != null) {
             dependentTypesHelper.viewpointAdaptTypeVariableBounds(
                     element, f, visitorState.getPath());

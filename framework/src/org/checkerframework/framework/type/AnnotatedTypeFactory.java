@@ -3484,7 +3484,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
 
         // ========= Overridden Type =========
         AnnotatedDeclaredType functionalInterfaceType = getFunctionalInterfaceType(tree);
-        makeGroundTargetType(functionalInterfaceType, (DeclaredType) TreeUtils.typeOf(tree), tree);
+        makeGroundTargetType(functionalInterfaceType, (DeclaredType) TreeUtils.typeOf(tree));
 
         // ========= Overridden Executable =========
         Element fnElement = TreeUtils.findFunction(tree, processingEnv);
@@ -3673,7 +3673,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
      * @param tree the MemberReferenceTree or LambdaExpressionTree
      */
     private void makeGroundTargetType(
-            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType, Tree tree) {
+            AnnotatedDeclaredType functionalType, DeclaredType groundTargetJavaType) {
         if (functionalType.getTypeArguments().isEmpty()) {
             return;
         }
@@ -3681,8 +3681,7 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         List<AnnotatedTypeParameterBounds> bounds =
                 this.typeVariablesFromUse(
                         functionalType,
-                        (TypeElement) functionalType.getUnderlyingType().asElement(),
-                        tree);
+                        (TypeElement) functionalType.getUnderlyingType().asElement());
 
         List<AnnotatedTypeMirror> newTypeArguments =
                 new ArrayList<>(functionalType.getTypeArguments());
