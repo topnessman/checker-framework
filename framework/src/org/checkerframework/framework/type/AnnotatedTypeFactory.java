@@ -1543,10 +1543,18 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
         }
 
         List<AnnotatedTypeParameterBounds> res = new LinkedList<>();
+        for (AnnotatedTypeMirror atm : tvars) {
+            AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
+            AnnotatedTypeMirror upper = atv.getUpperBound();
+            upper = typeVarSubstitutor.substitute(mapping, upper);
+            AnnotatedTypeMirror lower = atv.getLowerBound();
+            lower = typeVarSubstitutor.substitute(mapping, lower);
+
+            res.add(new AnnotatedTypeParameterBounds(upper, lower));
+        }
 
         if (viewpointAdapter != null) {
-            viewpointAdapter.viewpointAdaptTypeVariableBounds(
-                    type, tvars, mapping, res, typeVarSubstitutor);
+            viewpointAdapter.viewpointAdaptTypeParameterBounds(type, res);
         }
         return res;
     }
