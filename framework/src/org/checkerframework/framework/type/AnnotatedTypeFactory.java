@@ -1542,14 +1542,12 @@ public class AnnotatedTypeFactory implements AnnotationProvider {
             enclosing = enclosing.getEnclosingType();
         }
 
-        List<AnnotatedTypeParameterBounds> res = new LinkedList<>();
+        List<AnnotatedTypeParameterBounds> res = new ArrayList<>(tvars.size());
+
         for (AnnotatedTypeMirror atm : tvars) {
             AnnotatedTypeVariable atv = (AnnotatedTypeVariable) atm;
-            AnnotatedTypeMirror upper = atv.getUpperBound();
-            upper = typeVarSubstitutor.substitute(mapping, upper);
-            AnnotatedTypeMirror lower = atv.getLowerBound();
-            lower = typeVarSubstitutor.substitute(mapping, lower);
-
+            AnnotatedTypeMirror upper = typeVarSubstitutor.substitute(mapping, atv.getUpperBound());
+            AnnotatedTypeMirror lower = typeVarSubstitutor.substitute(mapping, atv.getLowerBound());
             res.add(new AnnotatedTypeParameterBounds(upper, lower));
         }
 
